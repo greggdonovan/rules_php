@@ -1,0 +1,11 @@
+WARNING: /Users/gdonovan/development/rules_php/php/php.bzl:137:4: Hello.
+____Loading complete.  Analyzing...
+WARNING: /Users/gdonovan/development/rules_php/php/php.bzl:45:5: ["basename", "dirname", "extension", "is_directory", "is_source", "owner", "path", "root", "short_path"].
+WARNING: /Users/gdonovan/development/rules_php/php/php.bzl:48:5: third_party/php/php-osx-x86_64.exe -d allow_url_fopen=On -d detect_unicode=Off third_party/phpunit/phpunit-6.2.3.phar test/ExampleTest.php.
+WARNING: /Users/gdonovan/development/rules_php/php/php.bzl:65:5: depset([], order = "postorder").
+____Found 2 targets and 1 test target...
+____Elapsed time: 0.099s, Critical Path: 0.00s
+//test:ExampleTest                                              (cached) PASSED in 0.2s
+
+Executed 0 out of 1 test: 1 test passes.
+There were tests whose specified size is too big. Use the --test_verbose_timeout_warnings command line option to see which ones these are.
