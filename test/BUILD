@@ -1,9 +1,11 @@
 package(default_testonly = 1)
 
-load("//php:php.bzl",
-     "php_library",
-     "php_binary",
-     "php_test")
+load(
+    "//php:php.bzl",
+    "php_binary",
+    "php_library",
+    "php_test",
+)
 
 php_library(
     name = "HelloLib",
@@ -15,7 +17,6 @@ php_binary(
     src = "test.php",
     deps = [":HelloLib"],
 )
-
 
 php_test(
     name = "ExampleTest",

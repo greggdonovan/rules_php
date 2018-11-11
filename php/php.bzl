@@ -1,19 +1,28 @@
 """Rules for supporting the PHP langauge."""
 
-PHP_FILETYPES = FileType([".php"])
+PhpLibrary = provider(fields = ["transitive_sources"])
+PHP_FILETYPES = [".php"]
 
 _php_srcs_attr = attr.label_list(allow_files = PHP_FILETYPES)
 
-def collect_transitive_sources(ctx):
-    source_files = depset(order="postorder")
-    for dep in ctx.attr.deps:
-        source_files += dep.transitive_php_files
-    return source_files
+def get_transitive_srcs(srcs, deps):
+    """Obtain the source files for a target and its transitive dependencies.
+
+    Args:
+      srcs: a list of source files
+      deps: a list of targets that are direct dependencies
+    Returns:
+      a collection of the transitive sources
+    """
+    return depset(
+        srcs,
+        transitive = [dep[PhpLibrary].transitive_sources for dep in deps],
+    )
 
 def _php_library_impl(ctx):
     print(dir(ctx.executable._phan))
 
-    cmd = "%s %s" % (ctx.executable._phan.path, PHP_FILETYPES.filter(ctx.files.srcs))
+    cmd = "%s %s" % (ctx.executable._phan.path, ctx.files.srcs)
     print(cmd)
 
     # TODO ctx.file_action(
@@ -21,11 +30,9 @@ def _php_library_impl(ctx):
     #    content="#!/bin/bash\n%s" % cmd,
     #    executable=True
     #    )
-    transitive_sources = collect_transitive_sources(ctx)
-    transitive_sources += PHP_FILETYPES.filter(ctx.files.srcs)
-    return struct(
-        files = depset(),
-        transitive_php_files = transitive_sources)
+
+    trans_srcs = get_transitive_srcs(ctx.files.srcs, ctx.attr.deps)
+    return [PhpLibrary(transitive_sources = trans_srcs)]
 
 php_deps_attr = attr.label_list(
     providers = ["transitive_php_files"],
@@ -36,17 +43,16 @@ def _php_binary_impl(ctx):
     php = ctx.file._php
     options = [
         "-cvf",
-        "TestBinary.tar"
+        "TestBinary.tar",
     ]
 
     # Load up all the transitive sources as dependent includes.
-    transitive_sources = collect_transitive_sources(ctx)
-    for src in transitive_sources:
+    trans_srcs = get_transitive_srcs(ctx.files.srcs, ctx.attr.deps)
+    for src in trans_srcs:
         options += [src.path]
 
-
-    ctx.action(      
-        inputs = list(transitive_sources),
+    ctx.action(
+        inputs = list(trans_srcs),
         command = "touch %s" % (ctx.outputs.tar_file.path),
         outputs = [ctx.outputs.tar_file],
     )
@@ -56,30 +62,31 @@ def _php_test_impl(ctx):
 
     cmd = "%s -d allow_url_fopen=On -d detect_unicode=Off %s %s" % (ctx.executable._php.path, ctx.executable._phpunit.path, ctx.file.src.path)
     print(cmd)
+
     # junit_xml_output=File(ctx.file.src.path + ".xml")
     # print(junit_xml_output)
     # /usr/bin/env php -d allow_url_fopen=On -d detect_unicode=Off /usr/local/Cellar/phpunit/6.2.3/libexec/phpunit-6.2.3.phar "$@"
-    #ctx.action(      
+    #ctx.action(
     #    inputs = list(transitive_sources) + [ctx.file.src],
     #    command = cmd,
     #    outputs = [ctx.outputs.junit_xml]
     #)
     ctx.file_action(
-      output=ctx.outputs.executable,
-      content="#!/bin/bash\n%s" % cmd,
-      executable=True
+        output = ctx.outputs.executable,
+        content = "#!/bin/bash\n%s" % cmd,
+        executable = True,
     )
 
     # Load up all the transitive sources as dependent includes.
-    transitive_sources = collect_transitive_sources(ctx)
-    print(transitive_sources)
-    test_inputs = ([ctx.file.src, ctx.executable._php, ctx.executable._phpunit] + list(transitive_sources))
+    trans_srcs = get_transitive_srcs(ctx.files.srcs, ctx.attr.deps)
+    print(trans_srcs)
+    test_inputs = ([ctx.file.src, ctx.executable._php, ctx.executable._phpunit] + trans_srcs.to_list())
 
     return struct(
-        runfiles=ctx.runfiles(
-            files=test_inputs,
-            collect_data=True,
-        )
+        runfiles = ctx.runfiles(
+            files = test_inputs,
+            collect_data = True,
+        ),
     )
 
 def _phar_library(ctx):
@@ -94,17 +101,16 @@ def _phar_library(ctx):
 php_binary = rule(
     attrs = {
         "src": attr.label(
-            allow_files = PHP_FILETYPES,
+            allow_single_file = True,
             mandatory = True,
-            single_file = True,
         ),
-        "deps": php_deps_attr,        
+        "deps": php_deps_attr,
         "_php": attr.label(
-          default = Label("//third_party/php:php"),
-          executable = True,
-          cfg = "host",
-          single_file = True,
-        )
+            default = Label("//third_party/php:php"),
+            executable = True,
+            cfg = "host",
+            allow_single_file = True,
+        ),
     },
     outputs = {
         "tar_file": "%{name}.tar",
@@ -116,16 +122,16 @@ php_library = rule(
     attrs = {
         "srcs": attr.label_list(
             allow_files = PHP_FILETYPES,
-            non_empty = True,
+            allow_empty = False,
             mandatory = True,
-        ),        
+        ),
         "deps": php_deps_attr,
         "_phan": attr.label(
             default = Label("@phan//file"),
             executable = True,
             cfg = "host",
-            single_file = True,
-        )
+            allow_single_file = True,
+        ),
     },
     implementation = _php_library_impl,
 )
@@ -135,21 +141,20 @@ php_test = rule(
         "src": attr.label(
             allow_files = PHP_FILETYPES,
             mandatory = True,
-            single_file = True,
         ),
-        "deps": php_deps_attr,        
+        "deps": php_deps_attr,
         "_php": attr.label(
-          default = Label("//third_party/php:php"),
-          executable = True,
-          cfg = "host",
-          single_file = True,
+            default = Label("//third_party/php:php"),
+            executable = True,
+            cfg = "host",
+            allow_single_file = True,
         ),
         "_phpunit": attr.label(
-          default = Label("//third_party/phpunit:phpunit"),
-          executable = True,
-          cfg = "host",
-          single_file = True,
-        )        
+            default = Label("//third_party/phpunit:phpunit"),
+            executable = True,
+            cfg = "host",
+            allow_single_file = True,
+        ),
     },
     executable = True,
     test = True,
@@ -171,5 +176,5 @@ def php_repositories():
         url = "https://github.com/etsy/phan/releases/download/0.9.4/phan.phar",
     )
 
-    # TODO composer.phar perhaps?
-    # https://getcomposer.org/download/1.4.3/composer.phar
+# TODO composer.phar perhaps?
+# https://getcomposer.org/download/1.4.3/composer.phar
